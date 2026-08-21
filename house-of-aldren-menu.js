@@ -1006,6 +1006,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
     var isEmpty = visibleCount === 0;
 
+    // Hide the wrapper itself too, not just its child cards — a wrapper with
+    // min-height/padding in the Designer can leave visible empty space (or
+    // worse, bleed through) even when every card inside it is display:none.
+    favoriteListWrappers.forEach(function (favoriteListWrapper) {
+      favoriteListWrapper.style.display = isEmpty ? 'none' : '';
+    });
+
     emptyFavoritesEls.forEach(function (emptyFavorites) {
       emptyFavorites.style.display = isEmpty ? 'flex' : 'none';
     });
@@ -1460,10 +1467,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     cards.forEach(function (card) {
       var nameEl = card.querySelector('[dd-dish-field="name"]');
-      var descEl = card.querySelector('[dd-dish-field="description"]');
       var nameText = nameEl ? nameEl.textContent.toLowerCase() : '';
-      var descText = descEl ? descEl.textContent.toLowerCase() : '';
-      var isMatch = nameText.indexOf(trimmedQuery) !== -1 || descText.indexOf(trimmedQuery) !== -1;
+      var isMatch = nameText.indexOf(trimmedQuery) !== -1;
       card.style.display = isMatch ? '' : 'none';
       if (isMatch) matchCount++;
     });
