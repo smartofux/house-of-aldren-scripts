@@ -495,15 +495,18 @@ document.addEventListener('DOMContentLoaded', function () {
     var detailPanel = document.querySelector('.dish_detail-panel');
     var tableForm = document.querySelector('.dish_table-form');
     var orderSummaryPanel = document.querySelector('.order-summary_panel');
-    var tokenWrap = document.querySelector('.order-items-token-wrap');
-    var qrCodeEl = document.querySelector('.order-summary_qr-code');
+    // querySelectorAll (not querySelector) — same duplicate-element footgun
+    // hit elsewhere in this file: a breakpoint duplicate of these elements
+    // would otherwise get reset instead of the one actually on screen.
+    var tokenWraps = document.querySelectorAll('.order-items-token-wrap');
+    var qrCodeEls = document.querySelectorAll('.order-summary_qr-code');
     if (detailPanel) detailPanel.classList.remove('is-open');
     if (tableForm) tableForm.classList.remove('is-open');
     if (orderSummaryPanel) orderSummaryPanel.classList.add('is-open');
     // Reset QR view state every time the summary opens fresh, so reopening
     // never starts mid-QR-view from a previous order flow.
-    if (tokenWrap) tokenWrap.classList.remove('is-close');
-    if (qrCodeEl) qrCodeEl.classList.remove('is-qr-code');
+    tokenWraps.forEach(function (el) { el.classList.remove('is-close'); });
+    qrCodeEls.forEach(function (el) { el.classList.remove('is-qr-code'); });
     populateOrderSummary();
   }
 
@@ -533,45 +536,53 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // Reused across repeat opens via .update() instead of rebuilding, so it
   // stays fast if items/table change and the person reopens the QR view.
-  var qrCodeInstance = null;
+  // Keyed per-container since a duplicate breakpoint element means more
+  // than one canvas can exist in the DOM at once.
+  var qrCodeInstances = [];
 
   function renderOrderQRCode() {
-    var container = document.querySelector('[dd-element="qr-canvas"]');
-    if (!container || typeof QRCodeStyling === 'undefined') return;
+    // querySelectorAll — a duplicate qr-canvas element for another
+    // breakpoint would otherwise sit blank while only the first match
+    // (possibly the hidden one) gets rendered into.
+    var containers = document.querySelectorAll('[dd-element="qr-canvas"]');
+    if (!containers.length || typeof QRCodeStyling === 'undefined') return;
 
     var payload = buildOrderPayload();
     var qrData = JSON.stringify(payload);
     var logoImg = document.querySelector('[dd-qr-logo]');
     var logoSrc = logoImg ? logoImg.src : undefined;
 
-    if (!qrCodeInstance) {
-      qrCodeInstance = new QRCodeStyling({
-        width: 260,
-        height: 260,
-        type: 'svg',
-        data: qrData,
-        image: logoSrc,
-        dotsOptions: { type: 'rounded', color: '#1a1a1a' },
-        cornersSquareOptions: { type: 'extra-rounded', color: '#1a1a1a' },
-        cornersDotOptions: { type: 'dot', color: '#1a1a1a' },
-        backgroundOptions: { color: '#ffffff' },
-        // High error correction is what allows the center logo to sit on top
-        // of the code while it stays reliably scannable.
-        imageOptions: { crossOrigin: 'anonymous', margin: 8, imageSize: 0.35, hideBackgroundDots: true },
-        qrOptions: { errorCorrectionLevel: 'H' }
-      });
-      container.innerHTML = '';
-      qrCodeInstance.append(container);
-    } else {
-      qrCodeInstance.update({ data: qrData, image: logoSrc });
-    }
+    containers.forEach(function (container, i) {
+      if (!qrCodeInstances[i]) {
+        qrCodeInstances[i] = new QRCodeStyling({
+          width: 260,
+          height: 260,
+          type: 'svg',
+          data: qrData,
+          image: logoSrc,
+          dotsOptions: { type: 'rounded', color: '#1a1a1a' },
+          cornersSquareOptions: { type: 'extra-rounded', color: '#1a1a1a' },
+          cornersDotOptions: { type: 'dot', color: '#1a1a1a' },
+          backgroundOptions: { color: '#ffffff' },
+          // High error correction is what allows the center logo to sit on top
+          // of the code while it stays reliably scannable.
+          imageOptions: { crossOrigin: 'anonymous', margin: 8, imageSize: 0.35, hideBackgroundDots: true },
+          qrOptions: { errorCorrectionLevel: 'H' }
+        });
+        container.innerHTML = '';
+        qrCodeInstances[i].append(container);
+      } else {
+        qrCodeInstances[i].update({ data: qrData, image: logoSrc });
+      }
+    });
   }
 
   function showOrderQRCode() {
-    var tokenWrap = document.querySelector('.order-items-token-wrap');
-    var qrCodeEl = document.querySelector('.order-summary_qr-code');
-    if (tokenWrap) tokenWrap.classList.add('is-close');
-    if (qrCodeEl) qrCodeEl.classList.add('is-qr-code');
+    // querySelectorAll — see note above; keeps every instance in sync.
+    var tokenWraps = document.querySelectorAll('.order-items-token-wrap');
+    var qrCodeEls = document.querySelectorAll('.order-summary_qr-code');
+    tokenWraps.forEach(function (el) { el.classList.add('is-close'); });
+    qrCodeEls.forEach(function (el) { el.classList.add('is-qr-code'); });
     renderOrderQRCode();
   }
 
