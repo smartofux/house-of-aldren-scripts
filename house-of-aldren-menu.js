@@ -984,27 +984,33 @@ document.addEventListener('DOMContentLoaded', function () {
 
   function renderFavoritesList() {
     var favorites = loadFavorites();
-    var favoriteListWrapper = document.querySelector('[dd-component="favorite-list"]');
-    var emptyFavorites = document.querySelector('[dd-element="empty-favorites"]');
-    var favoritesModal = document.querySelector('[dd-modal="favorites"]');
-    if (!favoriteListWrapper) return;
+    // querySelectorAll (not querySelector) — Webflow can duplicate this
+    // structure per breakpoint, and a singular match only fixes the first
+    // instance, leaving a second untouched copy showing raw CMS items
+    // behind the empty state. Same footgun as closeModal(); same fix.
+    var favoriteListWrappers = document.querySelectorAll('[dd-component="favorite-list"]');
+    var emptyFavoritesEls = document.querySelectorAll('[dd-element="empty-favorites"]');
+    var favoritesModals = document.querySelectorAll('[dd-modal="favorites"]');
+    if (!favoriteListWrappers.length) return;
 
-    var cards = favoriteListWrapper.querySelectorAll('[dd-dish-id]');
     var visibleCount = 0;
-    cards.forEach(function (card) {
-      var dishId = card.getAttribute('dd-dish-id');
-      var isFav = favorites.indexOf(dishId) !== -1;
-      card.style.display = isFav ? '' : 'none';
-      if (isFav) visibleCount++;
+    favoriteListWrappers.forEach(function (favoriteListWrapper) {
+      var cards = favoriteListWrapper.querySelectorAll('[dd-dish-id]');
+      cards.forEach(function (card) {
+        var dishId = card.getAttribute('dd-dish-id');
+        var isFav = favorites.indexOf(dishId) !== -1;
+        card.style.display = isFav ? '' : 'none';
+        if (isFav) visibleCount++;
+      });
     });
 
     var isEmpty = visibleCount === 0;
 
-    if (emptyFavorites) {
+    emptyFavoritesEls.forEach(function (emptyFavorites) {
       emptyFavorites.style.display = isEmpty ? 'flex' : 'none';
-    }
+    });
 
-    if (favoritesModal) {
+    favoritesModals.forEach(function (favoritesModal) {
       var header = favoritesModal.querySelector('.menu_bottom-header');
       var overlay = favoritesModal.querySelector('.favorite_overlay');
       [header, overlay].forEach(function (el) {
@@ -1012,7 +1018,7 @@ document.addEventListener('DOMContentLoaded', function () {
         el.style.opacity = isEmpty ? '0' : '';
         el.style.pointerEvents = isEmpty ? 'none' : '';
       });
-    }
+    });
 
     updateClearFavoriteVisibility();
   }
@@ -1193,6 +1199,14 @@ document.addEventListener('DOMContentLoaded', function () {
     if (showQrBtn) {
       e.preventDefault();
       showOrderQRCode();
+    }
+
+    // Order summary panel's dedicated close icon — the only thing that may
+    // close this panel (see OUTSIDE-CLICK-CLOSE exclusion below).
+    var orderCancelBtn = e.target.closest('[dd-order-trigger="cancel"]');
+    if (orderCancelBtn) {
+      e.preventDefault();
+      closeModal('dish-detail');
     }
   });
 
@@ -1391,13 +1405,17 @@ document.addEventListener('DOMContentLoaded', function () {
     if (e.target.closest('[dd-action="open-highlight"]')) return;
     if (e.target.closest('[dd-action^="ready-to-order-"]')) return; // these live outside modal-content and open the modal in the same click
     if (e.target.closest('.dish_table-form')) return; // table-select form is legitimate modal content, not "outside"
-    if (e.target.closest('.order-summary_panel')) return; // order summary panel, same reasoning (Edit Selection / Show QR Code)
+    // Order summary panel: outside clicks (backdrop, header, anywhere) must
+    // NEVER close it — only the explicit [dd-order-trigger="cancel"] icon may.
+    if (document.querySelector('.order-summary_panel.is-open')) return;
     if (e.target.closest('[dd-modal-content]')) return;
     closeModal(currentOpenModal);
   });
 
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && currentOpenModal) {
+      // Same rule as outside-click-close: order summary only closes via its icon.
+      if (document.querySelector('.order-summary_panel.is-open')) return;
       closeModal(currentOpenModal);
     }
   });
