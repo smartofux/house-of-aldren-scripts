@@ -534,6 +534,11 @@ document.addEventListener('DOMContentLoaded', function () {
     var tableDisplay = tableMatch ? tableMatch[0] : tableRaw;
     var token = generateOrderToken(itemIds, tableRaw);
 
+    // Optional — only present once a [dd-order-instructions] textarea is
+    // added to the table-select step. Safe no-op until then.
+    var instructionsEl = document.querySelector('[dd-order-instructions]');
+    var instructions = instructionsEl ? instructionsEl.value.trim() : '';
+
     var items = [];
     var total = 0;
     itemIds.forEach(function (id) {
@@ -545,7 +550,7 @@ document.addEventListener('DOMContentLoaded', function () {
       total += price;
     });
 
-    return { token: token, table: tableDisplay, items: items, total: total.toFixed(2) };
+    return { token: token, table: tableDisplay, items: items, total: total.toFixed(2), instructions: instructions };
   }
 
   // ==========================================================================
@@ -603,21 +608,18 @@ document.addEventListener('DOMContentLoaded', function () {
   // than one canvas can exist in the DOM at once.
   var qrCodeInstances = [];
 
-  // Fetched and converted once, then reused — the logo doesn't change
-  // between renders, and converting to a data URL sidesteps CORS entirely
-  // (data URIs have no origin to restrict), regardless of how the source
-  // <img dd-qr-logo> element itself is hosted, styled, or displayed on the
-  // page — none of that affects whether QRCodeStyling can read its pixels.
-  var qrLogoDataUrlPromise = null;
-  function getQrLogoDataUrl() {
-    if (qrLogoDataUrlPromise) return qrLogoDataUrlPromise;
+  // Captured immediately here, at script load, and NEVER re-queried later —
+  // because the <img dd-qr-logo> lives INSIDE the same [dd-element="qr-canvas"]
+  // container that renderOrderQRCode() clears via innerHTML = '' on first
+  // render. Reading it lazily (only when a QR is first shown) created a
+  // race: read-and-cache had to win before the first wipe ever happened.
+  // Reading it here, at the top of the script before any interaction is
+  // even possible, makes that race impossible rather than merely unlikely.
+  var qrLogoDataUrlPromise = (function () {
     var logoImg = document.querySelector('[dd-qr-logo]');
     var logoSrc = logoImg ? logoImg.src : null;
-    if (!logoSrc) {
-      qrLogoDataUrlPromise = Promise.resolve(undefined);
-      return qrLogoDataUrlPromise;
-    }
-    qrLogoDataUrlPromise = fetch(logoSrc)
+    if (!logoSrc) return Promise.resolve(undefined);
+    return fetch(logoSrc)
       .then(function (res) { return res.blob(); })
       .then(function (blob) {
         return new Promise(function (resolve) {
@@ -632,6 +634,8 @@ document.addEventListener('DOMContentLoaded', function () {
         // subject to the original CORS risk this was meant to avoid.
         return logoSrc;
       });
+  })();
+  function getQrLogoDataUrl() {
     return qrLogoDataUrlPromise;
   }
 
