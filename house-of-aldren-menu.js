@@ -353,6 +353,8 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!currentOpenModal) document.body.classList.remove('no-scroll');
     updateNavFixedHeight();
 
+    if (name === 'dish-detail') resetOrderQrState();
+
     if (name === 'highlight') {
       pauseAllHighlightVideos();
       clearActiveIndicatorAnimation();
@@ -388,6 +390,15 @@ document.addEventListener('DOMContentLoaded', function () {
     orderSummaryBtn.classList.toggle('is-disabled', !hasSelection);
   }
 
+  function resetOrderQrState() {
+    document.querySelectorAll('.order-items-token-wrap').forEach(function (el) {
+      el.classList.remove('is-close');
+    });
+    document.querySelectorAll('.order-summary_qr-code').forEach(function (el) {
+      el.classList.remove('is-qr-code');
+    });
+  }
+
   function openTableForm() {
     openModal('dish-detail'); // ensures wrapper is open; content panel is managed explicitly below
     var detailPanel = document.querySelector('.dish_detail-panel');
@@ -396,6 +407,11 @@ document.addEventListener('DOMContentLoaded', function () {
     if (detailPanel) detailPanel.classList.remove('is-open');
     if (orderSummaryPanel) orderSummaryPanel.classList.remove('is-open');
     if (tableForm) tableForm.classList.add('is-open');
+    // Without this, a QR view left open from a previous visit to the order
+    // summary panel stays fully opaque and clickable (its combo-class sets
+    // pointer-events: auto independent of the parent panel's own is-open
+    // state), silently blocking clicks on the table-select dropdown beneath.
+    resetOrderQrState();
     updateOrderSummaryState();
   }
 
@@ -495,19 +511,17 @@ document.addEventListener('DOMContentLoaded', function () {
     var detailPanel = document.querySelector('.dish_detail-panel');
     var tableForm = document.querySelector('.dish_table-form');
     var orderSummaryPanel = document.querySelector('.order-summary_panel');
-    // querySelectorAll (not querySelector) — same duplicate-element footgun
-    // hit elsewhere in this file: a breakpoint duplicate of these elements
-    // would otherwise get reset instead of the one actually on screen.
-    var tokenWraps = document.querySelectorAll('.order-items-token-wrap');
-    var qrCodeEls = document.querySelectorAll('.order-summary_qr-code');
     if (detailPanel) detailPanel.classList.remove('is-open');
     if (tableForm) tableForm.classList.remove('is-open');
     if (orderSummaryPanel) orderSummaryPanel.classList.add('is-open');
     // Reset QR view state every time the summary opens fresh, so reopening
     // never starts mid-QR-view from a previous order flow.
-    tokenWraps.forEach(function (el) { el.classList.remove('is-close'); });
-    qrCodeEls.forEach(function (el) { el.classList.remove('is-qr-code'); });
+    resetOrderQrState();
     populateOrderSummary();
+    // Logged here — the moment the order summary exists with its token —
+    // not when the QR is shown. Staff need the token searchable right away;
+    // the QR is a separate concern (it'll link to the order-view page).
+    submitOrderToSheet(buildOrderPayload());
   }
 
   // Builds the full JSON payload the QR code encodes, from the same data
@@ -534,11 +548,92 @@ document.addEventListener('DOMContentLoaded', function () {
     return { token: token, table: tableDisplay, items: items, total: total.toFixed(2) };
   }
 
+  // ==========================================================================
+  // ORDER LOGGING: fire-and-forget POST to a Google Apps Script Web App,
+  // which appends one row per order to a Google Sheet. No backend service,
+  // no monthly task/record cap — just Google's own generous free quotas.
+  // ==========================================================================
+  var ORDER_LOG_URL = 'https://script.google.com/macros/s/AKfycbx6NYX4vA49izNpixwlpzjNqb09SJU7e7a_XEYORQTXjsZY7ntV7MUKDqX2-ytlX5jGvQ/exec';
+
+  // Persisted (not just in-memory) so refreshing the QR page doesn't create
+  // a duplicate row for the same order token.
+  function hasLoggedOrder(token) {
+    try {
+      var logged = JSON.parse(sessionStorage.getItem('hoa_logged_orders') || '[]');
+      return logged.indexOf(token) !== -1;
+    } catch (e) {
+      return false;
+    }
+  }
+  function markOrderLogged(token) {
+    try {
+      var logged = JSON.parse(sessionStorage.getItem('hoa_logged_orders') || '[]');
+      if (logged.indexOf(token) === -1) {
+        logged.push(token);
+        sessionStorage.setItem('hoa_logged_orders', JSON.stringify(logged));
+      }
+    } catch (e) {
+      // sessionStorage unavailable (e.g. private browsing edge case) — the
+      // order still gets logged this one time, just without duplicate
+      // protection across a refresh. Not worth blocking on.
+    }
+  }
+
+  function submitOrderToSheet(payload) {
+    if (!payload || !payload.token || hasLoggedOrder(payload.token)) return;
+    markOrderLogged(payload.token);
+    // text/plain + no-cors avoids a CORS preflight entirely, since Apps
+    // Script Web Apps don't handle OPTIONS requests. We can't read the
+    // response this way, but the write still happens — check the Sheet
+    // itself to confirm rows are landing, not the browser console.
+    fetch(ORDER_LOG_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(payload)
+    }).catch(function () {
+      // Silently ignore network failures — logging the order should never
+      // block or interrupt the actual ordering flow for the person using it.
+    });
+  }
+
   // Reused across repeat opens via .update() instead of rebuilding, so it
   // stays fast if items/table change and the person reopens the QR view.
   // Keyed per-container since a duplicate breakpoint element means more
   // than one canvas can exist in the DOM at once.
   var qrCodeInstances = [];
+
+  // Fetched and converted once, then reused — the logo doesn't change
+  // between renders, and converting to a data URL sidesteps CORS entirely
+  // (data URIs have no origin to restrict), regardless of how the source
+  // <img dd-qr-logo> element itself is hosted, styled, or displayed on the
+  // page — none of that affects whether QRCodeStyling can read its pixels.
+  var qrLogoDataUrlPromise = null;
+  function getQrLogoDataUrl() {
+    if (qrLogoDataUrlPromise) return qrLogoDataUrlPromise;
+    var logoImg = document.querySelector('[dd-qr-logo]');
+    var logoSrc = logoImg ? logoImg.src : null;
+    if (!logoSrc) {
+      qrLogoDataUrlPromise = Promise.resolve(undefined);
+      return qrLogoDataUrlPromise;
+    }
+    qrLogoDataUrlPromise = fetch(logoSrc)
+      .then(function (res) { return res.blob(); })
+      .then(function (blob) {
+        return new Promise(function (resolve) {
+          var reader = new FileReader();
+          reader.onloadend = function () { resolve(reader.result); };
+          reader.readAsDataURL(blob);
+        });
+      })
+      .catch(function () {
+        // Fall back to the raw URL if fetch/convert fails for any reason —
+        // QRCodeStyling will still attempt to load it directly, just
+        // subject to the original CORS risk this was meant to avoid.
+        return logoSrc;
+      });
+    return qrLogoDataUrlPromise;
+  }
 
   function renderOrderQRCode() {
     // querySelectorAll — a duplicate qr-canvas element for another
@@ -549,31 +644,32 @@ document.addEventListener('DOMContentLoaded', function () {
 
     var payload = buildOrderPayload();
     var qrData = JSON.stringify(payload);
-    var logoImg = document.querySelector('[dd-qr-logo]');
-    var logoSrc = logoImg ? logoImg.src : undefined;
 
-    containers.forEach(function (container, i) {
-      if (!qrCodeInstances[i]) {
-        qrCodeInstances[i] = new QRCodeStyling({
-          width: 260,
-          height: 260,
-          type: 'svg',
-          data: qrData,
-          image: logoSrc,
-          dotsOptions: { type: 'rounded', color: '#1a1a1a' },
-          cornersSquareOptions: { type: 'extra-rounded', color: '#1a1a1a' },
-          cornersDotOptions: { type: 'dot', color: '#1a1a1a' },
-          backgroundOptions: { color: '#ffffff' },
-          // High error correction is what allows the center logo to sit on top
-          // of the code while it stays reliably scannable.
-          imageOptions: { crossOrigin: 'anonymous', margin: 8, imageSize: 0.35, hideBackgroundDots: true },
-          qrOptions: { errorCorrectionLevel: 'H' }
-        });
-        container.innerHTML = '';
-        qrCodeInstances[i].append(container);
-      } else {
-        qrCodeInstances[i].update({ data: qrData, image: logoSrc });
-      }
+    getQrLogoDataUrl().then(function (logoSrc) {
+      containers.forEach(function (container, i) {
+        if (!qrCodeInstances[i]) {
+          qrCodeInstances[i] = new QRCodeStyling({
+            width: 260,
+            height: 260,
+            type: 'svg',
+            data: qrData,
+            image: logoSrc,
+            dotsOptions: { type: 'rounded', color: '#1a1a1a' },
+            cornersSquareOptions: { type: 'extra-rounded', color: '#1a1a1a' },
+            cornersDotOptions: { type: 'dot', color: '#1a1a1a' },
+            backgroundOptions: { color: '#ffffff' },
+            // High error correction is what allows the center logo to sit on
+            // top of the code while it stays reliably scannable. No
+            // crossOrigin needed here — logoSrc is a data URL by this point.
+            imageOptions: { margin: 8, imageSize: 0.35, hideBackgroundDots: true },
+            qrOptions: { errorCorrectionLevel: 'H' }
+          });
+          container.innerHTML = '';
+          qrCodeInstances[i].append(container);
+        } else {
+          qrCodeInstances[i].update({ data: qrData, image: logoSrc });
+        }
+      });
     });
   }
 
