@@ -1201,14 +1201,14 @@ document.addEventListener('DOMContentLoaded', function () {
       return;
     }
 
-    var orderSummaryBtn = e.target.closest('.is-order-summary');
-    if (orderSummaryBtn) {
-      e.preventDefault();
-      if (orderSummaryBtn.classList.contains('is-disabled')) return;
-      openOrderSummary();
-      return;
-    }
-
+    // IMPORTANT: these two specific checks must run BEFORE the generic
+    // .is-order-summary check below. That class is meant to mark only the
+    // single "Ready to Order" trigger button, but it's also present (likely
+    // a Designer markup duplication) on the .dish_actions wrapper that
+    // contains both buttons below — so closest('.is-order-summary') was
+    // matching on every click here and returning early, before these two
+    // handlers ever ran. Checking dd-action first avoids the collision
+    // entirely regardless of what the wrapper's class list contains.
     var editSelectionBtn = e.target.closest('[dd-action="edit-selection"]');
     if (editSelectionBtn) {
       e.preventDefault();
@@ -1221,6 +1221,15 @@ document.addEventListener('DOMContentLoaded', function () {
     if (showQrBtn) {
       e.preventDefault();
       showOrderQRCode();
+      return;
+    }
+
+    var orderSummaryBtn = e.target.closest('.is-order-summary');
+    if (orderSummaryBtn) {
+      e.preventDefault();
+      if (orderSummaryBtn.classList.contains('is-disabled')) return;
+      openOrderSummary();
+      return;
     }
 
     // Order summary panel's dedicated close icon — the only thing that may
