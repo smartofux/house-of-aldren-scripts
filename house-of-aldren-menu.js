@@ -285,14 +285,18 @@ document.addEventListener('DOMContentLoaded', function () {
   var currentOpenModal = null;
 
   function updateNavFixedHeight() {
-    var navFixed = document.querySelector('.nav-bottom-fixed');
-    if (!navFixed) return;
+    // querySelectorAll (not querySelector) — same duplicate-element footgun
+    // as closeModal() and renderFavoritesList(): if Webflow duplicated this
+    // element per breakpoint, updating only the first match left a second
+    // untouched copy at its normal height, leaving a gap that let clicks and
+    // hovers pass through to elements behind the open modal.
+    var navFixedEls = document.querySelectorAll('.nav-bottom-fixed');
+    if (!navFixedEls.length) return;
     var expandModals = ['favorites', 'preferences'];
-    if (currentOpenModal && expandModals.indexOf(currentOpenModal) !== -1) {
-      navFixed.style.height = '100vh';
-    } else {
-      navFixed.style.height = 'auto';
-    }
+    var shouldExpand = currentOpenModal && expandModals.indexOf(currentOpenModal) !== -1;
+    navFixedEls.forEach(function (navFixed) {
+      navFixed.style.height = shouldExpand ? '100vh' : 'auto';
+    });
   }
 
   window.openModal = function (name) {
