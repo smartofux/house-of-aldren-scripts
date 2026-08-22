@@ -560,6 +560,15 @@ document.addEventListener('DOMContentLoaded', function () {
   // ==========================================================================
   var ORDER_LOG_URL = 'https://script.google.com/macros/s/AKfycbx6NYX4vA49izNpixwlpzjNqb09SJU7e7a_XEYORQTXjsZY7ntV7MUKDqX2-ytlX5jGvQ/exec';
 
+  // UTF-8-safe base64url — plain btoa() chokes on any non-Latin1 character
+  // (accented names, curly quotes typed into instructions, etc). This
+  // handles that, and produces URL-safe output (no +, /, or = padding)
+  // so it drops cleanly into a URL hash with zero extra encoding.
+  function toBase64Url(str) {
+    var b64 = btoa(unescape(encodeURIComponent(str)));
+    return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
   // Persisted (not just in-memory) so refreshing the QR page doesn't create
   // a duplicate row for the same order token.
   function hasLoggedOrder(token) {
@@ -647,7 +656,10 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!containers.length || typeof QRCodeStyling === 'undefined') return;
 
     var payload = buildOrderPayload();
-    var qrData = JSON.stringify(payload);
+    // The QR now encodes a URL, not raw JSON — scanning it opens the actual
+    // order-view page, with the order data traveling in the hash fragment
+    // (never sent to any server, decoded entirely client-side on that page).
+    var qrData = window.location.origin + '/order-view#o=' + toBase64Url(JSON.stringify(payload));
 
     getQrLogoDataUrl().then(function (logoSrc) {
       containers.forEach(function (container, i) {
