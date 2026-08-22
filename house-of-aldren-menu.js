@@ -638,37 +638,6 @@ document.addEventListener('DOMContentLoaded', function () {
   // than one canvas can exist in the DOM at once.
   var qrCodeInstances = [];
 
-  // Captured immediately here, at script load, and NEVER re-queried later —
-  // because the <img dd-qr-logo> lives INSIDE the same [dd-element="qr-canvas"]
-  // container that renderOrderQRCode() clears via innerHTML = '' on first
-  // render. Reading it lazily (only when a QR is first shown) created a
-  // race: read-and-cache had to win before the first wipe ever happened.
-  // Reading it here, at the top of the script before any interaction is
-  // even possible, makes that race impossible rather than merely unlikely.
-  var qrLogoDataUrlPromise = (function () {
-    var logoImg = document.querySelector('[dd-qr-logo]');
-    var logoSrc = logoImg ? logoImg.src : null;
-    if (!logoSrc) return Promise.resolve(undefined);
-    return fetch(logoSrc)
-      .then(function (res) { return res.blob(); })
-      .then(function (blob) {
-        return new Promise(function (resolve) {
-          var reader = new FileReader();
-          reader.onloadend = function () { resolve(reader.result); };
-          reader.readAsDataURL(blob);
-        });
-      })
-      .catch(function () {
-        // Fall back to the raw URL if fetch/convert fails for any reason —
-        // QRCodeStyling will still attempt to load it directly, just
-        // subject to the original CORS risk this was meant to avoid.
-        return logoSrc;
-      });
-  })();
-  function getQrLogoDataUrl() {
-    return qrLogoDataUrlPromise;
-  }
-
   function renderOrderQRCode() {
     // querySelectorAll — a duplicate qr-canvas element for another
     // breakpoint would otherwise sit blank while only the first match
@@ -695,37 +664,31 @@ document.addEventListener('DOMContentLoaded', function () {
     // (never sent to any server, decoded entirely client-side on that page).
     var qrData = window.location.origin + '/order-view#o=' + toBase64Url(JSON.stringify(compact));
 
-    getQrLogoDataUrl().then(function (logoSrc) {
-      containers.forEach(function (container, i) {
-        if (!qrCodeInstances[i]) {
-          qrCodeInstances[i] = new QRCodeStyling({
-            width: 240,
-            height: 240,
-            type: 'svg',
-            margin: 4,
-            data: qrData,
-            image: logoSrc,
-            dotsOptions: { type: 'classy-rounded', color: '#1a1a1a' },
-            cornersSquareOptions: { type: 'extra-rounded', color: '#1a1a1a' },
-            cornersDotOptions: { type: 'extra-rounded', color: '#1a1a1a' },
-            backgroundOptions: { color: '#ffffff' },
-            // High error correction is what allows the center logo to sit on
-            // top of the code while it stays reliably scannable. No
-            // crossOrigin needed here — logoSrc is a data URL by this point.
-            imageOptions: { margin: 8, imageSize: 0.35, hideBackgroundDots: true },
-            // M (not H) — H's extra redundancy was the single biggest
-            // contributor to module density. At M, the same data needs
-            // meaningfully fewer, larger modules, which is what actually
-            // lets "classy-rounded" styling read as rounded rather than
-            // looking identical to plain squares.
-            qrOptions: { errorCorrectionLevel: 'M' }
-          });
-          container.innerHTML = '';
-          qrCodeInstances[i].append(container);
-        } else {
-          qrCodeInstances[i].update({ data: qrData, image: logoSrc });
-        }
-      });
+    containers.forEach(function (container, i) {
+      if (!qrCodeInstances[i]) {
+        qrCodeInstances[i] = new QRCodeStyling({
+          width: 240,
+          height: 240,
+          type: 'svg',
+          margin: 4,
+          data: qrData,
+          // Plain squares throughout — the most universally reliable QR
+          // look, and the styling choice that can't fail to read correctly
+          // regardless of how dense the data makes the module grid.
+          dotsOptions: { type: 'square', color: '#1a1a1a' },
+          cornersSquareOptions: { type: 'square', color: '#1a1a1a' },
+          cornersDotOptions: { type: 'square', color: '#1a1a1a' },
+          backgroundOptions: { color: '#ffffff' },
+          // L (lowest) — no logo overlay to protect anymore, so the extra
+          // redundancy higher levels exist for isn't needed. Fewer, larger
+          // modules as a direct result — simpler and faster to scan.
+          qrOptions: { errorCorrectionLevel: 'L' }
+        });
+        container.innerHTML = '';
+        qrCodeInstances[i].append(container);
+      } else {
+        qrCodeInstances[i].update({ data: qrData });
+      }
     });
   }
 
