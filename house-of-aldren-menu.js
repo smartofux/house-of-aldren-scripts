@@ -677,10 +677,23 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!containers.length || typeof QRCodeStyling === 'undefined') return;
 
     var payload = buildOrderPayload();
+    // Compact keys + array-style items (not the same shape as the Sheet's
+    // raw JSON, which keeps full field names for human readability there).
+    // This directly reduces encoded length, which directly reduces QR
+    // module count — the actual cause of the QR looking too fine-grained
+    // for its own styling to read visually.
+    var compact = {
+      t: payload.token,
+      tb: payload.table,
+      i: (payload.items || []).map(function (item) { return [item.name, item.price]; }),
+      to: payload.total,
+      ins: payload.instructions,
+      c: payload.currency
+    };
     // The QR now encodes a URL, not raw JSON — scanning it opens the actual
     // order-view page, with the order data traveling in the hash fragment
     // (never sent to any server, decoded entirely client-side on that page).
-    var qrData = window.location.origin + '/order-view#o=' + toBase64Url(JSON.stringify(payload));
+    var qrData = window.location.origin + '/order-view#o=' + toBase64Url(JSON.stringify(compact));
 
     getQrLogoDataUrl().then(function (logoSrc) {
       containers.forEach(function (container, i) {
@@ -700,7 +713,12 @@ document.addEventListener('DOMContentLoaded', function () {
             // top of the code while it stays reliably scannable. No
             // crossOrigin needed here — logoSrc is a data URL by this point.
             imageOptions: { margin: 8, imageSize: 0.35, hideBackgroundDots: true },
-            qrOptions: { errorCorrectionLevel: 'H' }
+            // M (not H) — H's extra redundancy was the single biggest
+            // contributor to module density. At M, the same data needs
+            // meaningfully fewer, larger modules, which is what actually
+            // lets "classy-rounded" styling read as rounded rather than
+            // looking identical to plain squares.
+            qrOptions: { errorCorrectionLevel: 'M' }
           });
           container.innerHTML = '';
           qrCodeInstances[i].append(container);
