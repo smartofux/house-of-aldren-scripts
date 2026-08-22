@@ -686,19 +686,15 @@ document.addEventListener('DOMContentLoaded', function () {
       containers.forEach(function (container, i) {
         if (!qrCodeInstances[i]) {
           qrCodeInstances[i] = new QRCodeStyling({
-            width: 260,
-            height: 260,
+            width: 240,
+            height: 240,
             type: 'svg',
-            // Explicit and small — without this, the library sizes the
-            // quiet zone based on module count, so shorter encoded data
-            // (like our URL, vs. the old raw JSON) rendered a visibly
-            // smaller pattern with excess white space around it.
             margin: 4,
             data: qrData,
             image: logoSrc,
-            dotsOptions: { type: 'rounded', color: '#1a1a1a' },
+            dotsOptions: { type: 'classy-rounded', color: '#1a1a1a' },
             cornersSquareOptions: { type: 'extra-rounded', color: '#1a1a1a' },
-            cornersDotOptions: { type: 'dot', color: '#1a1a1a' },
+            cornersDotOptions: { type: 'extra-rounded', color: '#1a1a1a' },
             backgroundOptions: { color: '#ffffff' },
             // High error correction is what allows the center logo to sit on
             // top of the code while it stays reliably scannable. No
