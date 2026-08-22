@@ -390,6 +390,16 @@ document.addEventListener('DOMContentLoaded', function () {
     orderSummaryBtn.classList.toggle('is-disabled', !hasSelection);
   }
 
+  function updateShowQrButtonLabel(isShowingQr) {
+    document.querySelectorAll('[dd-action="show-qr-code"]').forEach(function (btn) {
+      // Prefers the text-holding child if this button follows the same
+      // "hide-mobile-portrait" label pattern as other buttons in this app;
+      // falls back to the whole button otherwise.
+      var textEl = btn.querySelector('.hide-mobile-portrait') || btn;
+      textEl.textContent = isShowingQr ? 'Show Summary' : 'Show QR Code';
+    });
+  }
+
   function resetOrderQrState() {
     document.querySelectorAll('.order-items-token-wrap').forEach(function (el) {
       el.classList.remove('is-close');
@@ -397,6 +407,17 @@ document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('.order-summary_qr-code').forEach(function (el) {
       el.classList.remove('is-qr-code');
     });
+    updateShowQrButtonLabel(false);
+  }
+
+  function toggleOrderQRView() {
+    var isCurrentlyShowingQr = !!document.querySelector('.order-summary_qr-code.is-qr-code');
+    if (isCurrentlyShowingQr) {
+      resetOrderQrState(); // also resets the button label back to "Show QR Code"
+    } else {
+      showOrderQRCode();
+      updateShowQrButtonLabel(true);
+    }
   }
 
   function openTableForm() {
@@ -550,7 +571,7 @@ document.addEventListener('DOMContentLoaded', function () {
       total += price;
     });
 
-    return { token: token, table: tableDisplay, items: items, total: total.toFixed(2), instructions: instructions };
+    return { token: token, table: tableDisplay, items: items, total: total.toFixed(2), instructions: instructions, currency: getCurrencySymbol() };
   }
 
   // ==========================================================================
@@ -1337,7 +1358,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var showQrBtn = e.target.closest('[dd-action="show-qr-code"]');
     if (showQrBtn) {
       e.preventDefault();
-      showOrderQRCode();
+      toggleOrderQRView();
       return;
     }
 
