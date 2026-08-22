@@ -379,6 +379,51 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   // ==========================================================================
+  // MOBILE NAV DROPDOWN: auto-close on selecting an item, plus body scroll
+  // lock while open. Requires two attributes added in Designer:
+  //   dd-action="toggle-mobile-nav"  → on menu_button (the hamburger/grid icon)
+  //   dd-element="mobile-nav-menu"   → on the dropdown wrapper containing
+  //                                     Search / Menu Highlights / the
+  //                                     "Recently added" dish preview list
+  // The dropdown's own open/close animation stays entirely Webflow's native
+  // IX2 interaction (already built on menu_button) — this code never
+  // touches that directly. Instead it tracks open/closed via our own
+  // boolean (flipped every time menu_button is clicked, whether by the
+  // person or by us programmatically) and, to close the dropdown from an
+  // item click inside it, just calls menu_button.click() again — IX2's own
+  // toggle handles the actual close as its natural "second click".
+  // ==========================================================================
+  var mobileNavOpen = false;
+  var mobileNavBtn = document.querySelector('[dd-action="toggle-mobile-nav"]');
+
+  function isMobilePortrait() {
+    return window.matchMedia('(max-width: 479px)').matches;
+  }
+
+  if (mobileNavBtn) {
+    mobileNavBtn.addEventListener('click', function () {
+      mobileNavOpen = !mobileNavOpen;
+      var dishesBody = document.querySelector('.dishes_body');
+      if (dishesBody) {
+        dishesBody.style.height = mobileNavOpen ? '100vh' : '';
+        dishesBody.style.overflow = mobileNavOpen ? 'hidden' : '';
+      }
+    });
+  }
+
+  document.addEventListener('click', function (e) {
+    if (!mobileNavBtn || !mobileNavOpen || !isMobilePortrait()) return;
+    var menuWrap = document.querySelector('[dd-element="mobile-nav-menu"]');
+    if (!menuWrap || !menuWrap.contains(e.target)) return;
+    var selectedItem = e.target.closest('[dd-trigger="search"], [dd-trigger="highlight"], .dish_item-wrap');
+    if (!selectedItem) return;
+    // Close the dropdown itself (its own item's click handler, e.g. opening
+    // the search modal, already ran/will run via normal event bubbling —
+    // this only handles the extra "also close the dropdown" behavior).
+    mobileNavBtn.click();
+  });
+
+  // ==========================================================================
   // ORDER FLOW: table-select form + order summary + QR code,
   // all inside dish-detail-wrapper as mutually-exclusive panels.
   // ==========================================================================
