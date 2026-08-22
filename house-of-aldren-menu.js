@@ -668,6 +668,11 @@ document.addEventListener('DOMContentLoaded', function () {
             width: 260,
             height: 260,
             type: 'svg',
+            // Explicit and small — without this, the library sizes the
+            // quiet zone based on module count, so shorter encoded data
+            // (like our URL, vs. the old raw JSON) rendered a visibly
+            // smaller pattern with excess white space around it.
+            margin: 4,
             data: qrData,
             image: logoSrc,
             dotsOptions: { type: 'rounded', color: '#1a1a1a' },
