@@ -417,10 +417,15 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!menuWrap || !menuWrap.contains(e.target)) return;
     var selectedItem = e.target.closest('[dd-trigger="search"], [dd-trigger="highlight"], .dish_item-wrap');
     if (!selectedItem) return;
-    // Close the dropdown itself (its own item's click handler, e.g. opening
-    // the search modal, already ran/will run via normal event bubbling —
-    // this only handles the extra "also close the dropdown" behavior).
-    mobileNavBtn.click();
+    // Deferred to the next tick — multiple listeners on the same document
+    // click event run in registration order, not DOM order. This code was
+    // inserted earlier in the file than the actual modal/dish-detail-open
+    // logic, so calling mobileNavBtn.click() synchronously here could race
+    // ahead of it. setTimeout(...,0) guarantees every other click handler
+    // for this same event has already finished before the nav closes.
+    setTimeout(function () {
+      mobileNavBtn.click();
+    }, 0);
   });
 
   // ==========================================================================
