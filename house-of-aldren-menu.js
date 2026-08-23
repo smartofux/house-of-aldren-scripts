@@ -325,11 +325,12 @@ document.addEventListener('DOMContentLoaded', function () {
       // Mobile only — desktop's z-index stays exactly as set in Designer.
       if (isMobilePortrait() && modal) modal.style.zIndex = '1100';
       var input = document.querySelector('[dd-search-input]');
-      if (input) {
-        setTimeout(function () {
-          input.focus();
-        }, 50);
-      }
+      // Called synchronously, not inside setTimeout — iOS Safari only
+      // honors a programmatic .focus() call when it happens within the
+      // same tick as the original tap. Any delay (even 50ms) puts it
+      // outside that window and iOS silently ignores it — no error, no
+      // fallback, it just doesn't focus.
+      if (input) input.focus();
     }
 
     if (name === 'highlight') {
