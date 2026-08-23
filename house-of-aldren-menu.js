@@ -1130,10 +1130,15 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   function updateClearFavoriteVisibility() {
-    var favoriteBottom = document.querySelector('.favorite_bottom');
-    if (!favoriteBottom) return;
+    // querySelectorAll (attribute, not class) — class names get renamed in
+    // Designer during normal design work and silently break selectors like
+    // this; a dedicated attribute is stable regardless of styling changes.
+    var favoriteBottoms = document.querySelectorAll('[dd-element="favorite-bottom"]');
+    if (!favoriteBottoms.length) return;
     var count = loadFavorites().length;
-    favoriteBottom.classList.toggle('is-favorite', count > 0);
+    favoriteBottoms.forEach(function (el) {
+      el.classList.toggle('is-favorite', count > 0);
+    });
   }
 
   function renderFavoritesList() {
@@ -1172,7 +1177,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     favoritesModals.forEach(function (favoritesModal) {
-      var header = favoritesModal.querySelector('.menu_bottom-header');
+      var header = favoritesModal.querySelector('[dd-element="favorite-header"]');
       var overlay = favoritesModal.querySelector('.favorite_overlay');
       [header, overlay].forEach(function (el) {
         if (!el) return;
