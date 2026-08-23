@@ -1138,6 +1138,10 @@ document.addEventListener('DOMContentLoaded', function () {
     var count = loadFavorites().length;
     favoriteBottoms.forEach(function (el) {
       el.classList.toggle('is-favorite', count > 0);
+      // Forced directly, not left to the is-favorite combo-class CSS rule —
+      // if that class's own base selector ever gets renamed in Designer
+      // again, visibility still works correctly regardless.
+      el.style.display = count > 0 ? '' : 'none';
     });
   }
 
