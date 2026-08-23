@@ -322,6 +322,8 @@ document.addEventListener('DOMContentLoaded', function () {
     updateNavFixedHeight();
 
     if (name === 'search') {
+      // Mobile only — desktop's z-index stays exactly as set in Designer.
+      if (isMobilePortrait() && modal) modal.style.zIndex = '1100';
       var input = document.querySelector('[dd-search-input]');
       if (input) {
         setTimeout(function () {
@@ -331,6 +333,8 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     if (name === 'highlight') {
+      // Mobile only — desktop's z-index stays exactly as set in Designer.
+      if (isMobilePortrait() && modal) modal.style.zIndex = '1200';
       showHighlightSlide(currentHighlightIndex); // resume from last-viewed slide
     }
   };
@@ -347,6 +351,11 @@ document.addEventListener('DOMContentLoaded', function () {
       modal.querySelectorAll('[dd-modal-content]').forEach(function (content) {
         content.classList.remove('is-open');
       });
+      // Revert the mobile-only z-index bump set in openModal — removing the
+      // inline override falls back to whatever Designer's own CSS default is.
+      if ((name === 'search' || name === 'highlight') && isMobilePortrait()) {
+        modal.style.zIndex = '';
+      }
     }
     if (trigger) trigger.classList.remove('is-open');
     if (currentOpenModal === name) currentOpenModal = null;
@@ -374,59 +383,23 @@ document.addEventListener('DOMContentLoaded', function () {
   document.querySelectorAll('[dd-trigger]').forEach(function (trigger) {
     trigger.addEventListener('click', function (e) {
       e.preventDefault();
-      toggleModal(trigger.getAttribute('dd-trigger'));
+      var name = trigger.getAttribute('dd-trigger');
+      // "X-close" triggers (e.g. dd-trigger="highlight-close") always close
+      // modal X specifically, rather than toggling a modal literally named
+      // "highlight-close" (which doesn't exist) — a small generic
+      // convention so any future "-close" trigger works the same way
+      // without needing its own special-cased handler.
+      if (name && name.indexOf('-close') === name.length - '-close'.length) {
+        closeModal(name.slice(0, -'-close'.length));
+      } else {
+        toggleModal(name);
+      }
     });
   });
-
-  // ==========================================================================
-  // MOBILE NAV DROPDOWN: auto-close on selecting an item, plus body scroll
-  // lock while open. Requires two attributes added in Designer:
-  //   dd-action="toggle-mobile-nav"  → on menu_button (the hamburger/grid icon)
-  //   dd-element="mobile-nav-menu"   → on the dropdown wrapper containing
-  //                                     Search / Menu Highlights / the
-  //                                     "Recently added" dish preview list
-  // The dropdown's own open/close animation stays entirely Webflow's native
-  // IX2 interaction (already built on menu_button) — this code never
-  // touches that directly. Instead it tracks open/closed via our own
-  // boolean (flipped every time menu_button is clicked, whether by the
-  // person or by us programmatically) and, to close the dropdown from an
-  // item click inside it, just calls menu_button.click() again — IX2's own
-  // toggle handles the actual close as its natural "second click".
-  // ==========================================================================
-  var mobileNavOpen = false;
-  var mobileNavBtn = document.querySelector('[dd-action="toggle-mobile-nav"]');
 
   function isMobilePortrait() {
     return window.matchMedia('(max-width: 479px)').matches;
   }
-
-  if (mobileNavBtn) {
-    mobileNavBtn.addEventListener('click', function () {
-      mobileNavOpen = !mobileNavOpen;
-      var dishesBody = document.querySelector('.dishes_body');
-      if (dishesBody) {
-        dishesBody.style.height = mobileNavOpen ? '100vh' : '';
-        dishesBody.style.overflow = mobileNavOpen ? 'hidden' : '';
-      }
-    });
-  }
-
-  document.addEventListener('click', function (e) {
-    if (!mobileNavBtn || !mobileNavOpen || !isMobilePortrait()) return;
-    var menuWrap = document.querySelector('[dd-element="mobile-nav-menu"]');
-    if (!menuWrap || !menuWrap.contains(e.target)) return;
-    var selectedItem = e.target.closest('[dd-trigger="search"], [dd-trigger="highlight"], .dish_item-wrap');
-    if (!selectedItem) return;
-    // Deferred to the next tick — multiple listeners on the same document
-    // click event run in registration order, not DOM order. This code was
-    // inserted earlier in the file than the actual modal/dish-detail-open
-    // logic, so calling mobileNavBtn.click() synchronously here could race
-    // ahead of it. setTimeout(...,0) guarantees every other click handler
-    // for this same event has already finished before the nav closes.
-    setTimeout(function () {
-      mobileNavBtn.click();
-    }, 0);
-  });
 
   // ==========================================================================
   // ORDER FLOW: table-select form + order summary + QR code,
@@ -1600,7 +1573,6 @@ document.addEventListener('DOMContentLoaded', function () {
     if (e.target.closest('[dd-pair-slot]')) return;
     if (e.target.closest('[dd-action="open-highlight"]')) return;
     if (e.target.closest('[dd-action^="ready-to-order-"]')) return; // these live outside modal-content and open the modal in the same click
-    if (e.target.closest('[dd-action="toggle-mobile-nav"]')) return; // our own synthetic click here (to close the mobile nav after a dish-item selection) was being read as an outside click, closing whatever modal that same selection just opened
     if (e.target.closest('.dish_table-form')) return; // table-select form is legitimate modal content, not "outside"
     // Order summary panel: outside clicks (backdrop, header, anywhere) must
     // NEVER close it — only the explicit [dd-order-trigger="cancel"] icon may.
