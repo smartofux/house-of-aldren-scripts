@@ -415,16 +415,8 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!mobileNavBtn || !mobileNavOpen || !isMobilePortrait()) return;
     var menuWrap = document.querySelector('[dd-element="mobile-nav-menu"]');
     if (!menuWrap || !menuWrap.contains(e.target)) return;
-    var selectedItem = e.target.closest('.dish_item-wrap');
+    var selectedItem = e.target.closest('[dd-trigger="search"], [dd-trigger="highlight"], .dish_item-wrap');
     if (!selectedItem) return;
-    // NOTE: [dd-trigger="search"] and [dd-trigger="highlight"] were
-    // intentionally removed from this selector. Their content lives WITHIN
-    // the same nav container this code closes — auto-closing the nav after
-    // selecting them was undoing their own just-opened state within
-    // milliseconds (confirmed via testing: works perfectly when the nav
-    // auto-close never fires, breaks the instant it does). Dish cards are
-    // safe here because dish-detail is a fully separate modal, unrelated
-    // to the nav's own structure.
     // Deferred to the next tick — multiple listeners on the same document
     // click event run in registration order, not DOM order. This code was
     // inserted earlier in the file than the actual modal/dish-detail-open
@@ -1608,6 +1600,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (e.target.closest('[dd-pair-slot]')) return;
     if (e.target.closest('[dd-action="open-highlight"]')) return;
     if (e.target.closest('[dd-action^="ready-to-order-"]')) return; // these live outside modal-content and open the modal in the same click
+    if (e.target.closest('[dd-action="toggle-mobile-nav"]')) return; // our own synthetic click here (to close the mobile nav after a dish-item selection) was being read as an outside click, closing whatever modal that same selection just opened
     if (e.target.closest('.dish_table-form')) return; // table-select form is legitimate modal content, not "outside"
     // Order summary panel: outside clicks (backdrop, header, anywhere) must
     // NEVER close it — only the explicit [dd-order-trigger="cancel"] icon may.
